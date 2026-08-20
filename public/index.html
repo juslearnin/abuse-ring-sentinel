@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SENTINEL // Real-Time Fraud Command Center</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --panel-bg: rgba(17, 24, 39, 0.7);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-cyan: #06b6d4;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(239, 68, 68, 0.05) 0px, transparent 50%);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 12px;
+      height: 12px;
+      background: var(--accent-cyan);
+      border-radius: 2px;
+      box-shadow: 0 0 10px var(--accent-cyan);
+    }
+
+    .brand-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    .system-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 6px 12px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 20px;
+      color: var(--accent-green);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent-green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 20px;
+      transition: border-color 0.2s ease;
+    }
+
+    .card:hover { border-color: rgba(255, 255, 255, 0.15); }
+
+    .card-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .card-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .feed-container {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1024px) {
+      .feed-container { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stream-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 640px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .stream-list::-webkit-scrollbar { width: 4px; }
+    .stream-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+
+    .tx-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--panel-border);
+      border-left: 4px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr 1fr 1.2fr;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      animation: slideDown 0.25s cubic-bezier(0, 0, 0.2, 1);
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .tx-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+      transform: translateX(2px);
+    }
+
+    .tx-card.active { border-color: var(--accent-cyan); }
+
+    /* Synchronized Decision Border Colors */
+    .tx-card.BLOCK { border-left-color: var(--accent-red); }
+    .tx-card.CHALLENGE_3DS { border-left-color: var(--accent-amber); }
+    .tx-card.APPROVE { border-left-color: var(--accent-green); }
+
+    .tx-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .tx-time {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .tx-amount {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      width: max-content;
+      text-align: center;
+    }
+
+    .badge-BLOCK { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-CHALLENGE_3DS { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-APPROVE { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+    .risk-meter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .bar-bg {
+      flex: 1;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    .score-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      min-width: 24px;
+    }
+
+    .inspector {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .inspector-placeholder {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 40px 0;
+      border: 1px dashed var(--panel-border);
+      border-radius: 8px;
+    }
+
+    .explanation-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #d1d5db;
+    }
+
+    .tag-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .tag {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--panel-border);
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo"></div>
+      <div class="brand-title">Abuse Sentinel // Live Engine</div>
+    </div>
+    <div class="system-status" id="connection-status">
+      <div class="status-dot"></div>
+      <span>SOCKETS CONNECTED</span>
+    </div>
+  </header>
+
+  <div class="metrics-grid">
+    <div class="card">
+      <div class="card-label">Total Evaluated</div>
+      <div class="card-value" id="stat-total">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Blocked Fraud (TP)</div>
+      <div class="card-value" style="color: var(--accent-red);" id="stat-blocks">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">3DS Challenges</div>
+      <div class="card-value" style="color: var(--accent-amber);" id="stat-challenges">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Net Loss Saved</div>
+      <div class="card-value" style="color: var(--accent-green);" id="stat-savings">₹0</div>
+    </div>
+  </div>
+
+  <div class="feed-container">
+    <div class="panel">
+      <div class="panel-title">
+        <span>Real-Time Risk Stream</span>
+        <span style="font-size: 11px; font-weight: normal;">Click row for LLM Evidence</span>
+      </div>
+      <div class="stream-list" id="stream-feed"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Graph & LLM Explanation</div>
+      <div class="inspector" id="inspector-content">
+        <div class="inspector-placeholder">
+          Select a transaction from the live feed to inspect its graph metrics and automated reasoning.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io('http://localhost:3000');
+    
+    let totalCount = 0;
+    let blockCount = 0;
+    let challengeCount = 0;
+    let savingsAmount = 0;
+    let activeCardRef = null;
+
+    socket.on('connect', () => {
+      document.getElementById('connection-status').innerHTML = `
+        <div class="status-dot"></div><span>SOCKETS CONNECTED</span>
+      `;
+    });
+
+    socket.on('disconnect', () => {
+      const statusEl = document.getElementById('connection-status');
+      statusEl.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+      statusEl.style.color = 'var(--accent-red)';
+      statusEl.innerHTML = `
+        <div class="status-dot" style="background: var(--accent-red); box-shadow: 0 0 8px var(--accent-red);"></div>
+        <span>DISCONNECTED</span>
+      `;
+    });
+
+    socket.on('transaction:processed', (data) => {
+      totalCount++;
+      if (data.decision === 'BLOCK') {
+        blockCount++;
+        savingsAmount += data.amount || 0;
+      } else if (data.decision === 'CHALLENGE_3DS') {
+        challengeCount++;
+      }
+
+      document.getElementById('stat-total').innerText = totalCount.toLocaleString();
+      document.getElementById('stat-blocks').innerText = blockCount.toLocaleString();
+      document.getElementById('stat-challenges').innerText = challengeCount.toLocaleString();
+      document.getElementById('stat-savings').innerText = `₹${savingsAmount.toLocaleString('en-IN')}`;
+
+      const feed = document.getElementById('stream-feed');
+      const card = document.createElement('div');
+      
+      // Perfectly synchronized color mapping based directly on the decision tier
+      const scoreColor = data.decision === 'BLOCK' ? 'var(--accent-red)' : 
+                        data.decision === 'CHALLENGE_3DS' ? 'var(--accent-amber)' : 'var(--accent-green)';
+      
+      card.className = `tx-card ${data.decision}`;
+      card.innerHTML = `
+        <div>
+          <div class="tx-id">${data.transactionId}</div>
+          <div class="tx-time">${new Date(data.timestamp || Date.now()).toLocaleTimeString()}</div>
+        </div>
+        <div class="tx-amount">₹${(data.amount || 0).toLocaleString('en-IN')}</div>
+        <div>
+          <span class="badge badge-${data.decision}">${data.decision.replace('_3DS', '')}</span>
+        </div>
+        <div class="risk-meter">
+          <div class="bar-bg">
+            <div class="bar-fill" style="width: ${data.riskScore}%; background: ${scoreColor};"></div>
+          </div>
+          <span class="score-text" style="color: ${scoreColor};">${data.riskScore}</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${data.primaryFactor || 'NORMAL_BEHAVIOR'}">
+          ${data.primaryFactor || 'NORMAL_BEHAVIOR'}
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        if (activeCardRef) activeCardRef.classList.remove('active');
+        card.classList.add('active');
+        activeCardRef = card;
+        renderInspector(data);
+      });
+
+      feed.insertBefore(card, feed.firstChild);
+
+      if (feed.children.length > 20) {
+        feed.removeChild(feed.lastChild);
+      }
+    });
+
+    function renderInspector(data) {
+      const container = document.getElementById('inspector-content');
+      
+      const metrics = data.graphMetrics || {};
+      const tags = [
+        `Node Degree: ${metrics.nodeDegree || 0}`,
+        `Cluster Nodes: ${metrics.clusterNodeCount || 1}`,
+        `Cluster Edges: ${metrics.clusterEdgeCount || 0}`,
+        `Cluster Density: ${metrics.clusterDensity || 0}`
+      ];
+
+      container.innerHTML = `
+        <div>
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Selected Transaction</div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; margin-top: 2px; word-break: break-all;">
+            ${data.transactionId}
+          </div>
+        </div>
+
+        <div class="explanation-box">
+          <div style="font-weight: 700; color: #fff; margin-bottom: 6px;">
+            Automated Audit Explanation
+          </div>
+          ${data.evidenceExplanation || 'Transaction processed through velocity and 2-hop graph centrality evaluation.'}
+        </div>
+
+        <div>
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Graph Telemetry Summary</div>
+          <div class="tag-cloud">
+            ${tags.map(t => `<span class="tag">${t}</span>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>
