@@ -1,7 +1,9 @@
+## Abuse-Ring Sentinel: Real-Time In-Memory Graph Detection & Resilient Hybrid Fraud Engine
+
 <img width="959" height="463" alt="image" src="https://github.com/user-attachments/assets/f8a5df80-3682-4714-9ed5-7ad51d1b7f74" />
 <img width="927" height="420" alt="image" src="https://github.com/user-attachments/assets/d67a2004-59cc-449c-b056-a61e3b4eb95c" />
 <img width="930" height="418" alt="image" src="https://github.com/user-attachments/assets/b97b9284-8ffb-4438-a49d-c8d834d84101" />
-# Abuse-Ring Sentinel: Real-Time In-Memory Graph Detection & Resilient Hybrid Fraud Engine
+
 
 ## Executive Overview & Problem Domain
 
